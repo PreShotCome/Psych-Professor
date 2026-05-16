@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: psych-professor
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false          # you'll paste this in the Render dashboard
+      - key: PROFILES_DIR
+        value: /data/profiles
+      - key: CLAUDE_MODEL
+        value: claude-opus-4-7
+    disk:
+      name: profiles-disk
+      mountPath: /data/profiles
+      sizeGB: 1

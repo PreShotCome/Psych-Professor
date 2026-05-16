@@ -1,0 +1,15 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - PROFILES_DIR=/data/profiles
+      - CLAUDE_MODEL=claude-opus-4-7
+    volumes:
+      - profiles_data:/data/profiles
+    restart: unless-stopped
+
+volumes:
+  profiles_data:
