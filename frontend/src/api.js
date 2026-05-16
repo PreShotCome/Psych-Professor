@@ -15,8 +15,8 @@ export const api = {
   health: () => get('/api/health'),
 
   // profile + session travel with every request; server returns updated versions
-  chat: (userId, displayName, message, profile, session) =>
-    post('/api/chat', { user_id: userId, display_name: displayName, message, profile, session }),
+  chat: (userId, displayName, message, profile, session, history) =>
+    post('/api/chat', { user_id: userId, display_name: displayName, message, profile, session, history }),
 
   startSession: (userId, displayName, profile) =>
     post('/api/session/start', { user_id: userId, display_name: displayName, profile }),

@@ -37,6 +37,7 @@ export default function ProfilePanel({ userId, displayName, psychState, onStateU
     setError(null)
     try {
       const result = await api.startSession(userId, displayName, profile)
+      localStorage.removeItem(`messages_${userId}`)
       onStateUpdate({ profile: result.profile, session: result.session })
     } catch (err) {
       setError(err.message)

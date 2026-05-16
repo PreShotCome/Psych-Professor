@@ -40,6 +40,7 @@ class ChatRequest(BaseModel):
     message: str
     profile: dict | None = None   # serialized UserProfile from localStorage
     session: dict | None = None   # serialized SessionProfile from localStorage
+    history: list[dict] | None = None  # recent conversation [{role, content}]
 
 
 class SessionRequest(BaseModel):
@@ -74,7 +75,7 @@ def chat(req: ChatRequest):
     brain = make_brain(req.user_id, req.display_name, req.profile, req.session)
     if brain._session is None:
         brain.start_session()
-    result = brain.process(req.message, return_analysis=True)
+    result = brain.process(req.message, return_analysis=True, history=req.history)
     # Return analysis + updated client state
     return {**result, **brain.get_state()}
 

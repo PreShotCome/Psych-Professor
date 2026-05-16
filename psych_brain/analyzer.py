@@ -111,6 +111,7 @@ class PsychAnalyzer:
         user_profile: UserProfile,
         session: SessionProfile,
         npc_persona: str = "a calm, perceptive observer",
+        history: list[dict] | None = None,
     ) -> str:
         """Generate a psychologically-aware NPC response with optional probing question."""
         lifetime = user_profile.lifetime_traits
@@ -150,11 +151,15 @@ Divergence from lifetime: {divergence:.2f}/1.0{"  ← significant shift this run
             + question_block
         )
 
+        # Build message list: prior conversation + current message
+        messages = list(history or [])
+        messages.append({"role": "user", "content": message})
+
         response = self.client.messages.create(
             model=self.model,
             max_tokens=600,
             system=system_prompt,
-            messages=[{"role": "user", "content": message}],
+            messages=messages,
         )
 
         return response.content[0].text.strip()

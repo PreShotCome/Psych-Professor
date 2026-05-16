@@ -6,6 +6,26 @@ const TRAIT_NAMES = [
   'moral', 'law', 'aggression', 'deception', 'empathy',
   'dominance', 'impulsivity', 'curiosity', 'paranoia', 'manipulation',
 ]
+const MAX_STORED_MESSAGES = 60
+const MAX_HISTORY_TO_SEND = 20  // last 10 exchanges sent to Claude
+
+function msgKey(userId) {
+  return `messages_${userId}`
+}
+
+function loadMessages(userId) {
+  try {
+    const raw = localStorage.getItem(msgKey(userId))
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+function saveMessages(userId, messages) {
+  const trimmed = messages.slice(-MAX_STORED_MESSAGES)
+  localStorage.setItem(msgKey(userId), JSON.stringify(trimmed))
+}
 
 function getSignificantSignals(signals) {
   if (!signals) return []
@@ -50,7 +70,7 @@ let _msgId = 0
 const nextId = () => ++_msgId
 
 export default function ChatView({ userId, displayName, psychState, onStateUpdate }) {
-  const [messages, setMessages] = useState([])
+  const [messages, setMessages] = useState(() => loadMessages(userId))
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -63,14 +83,32 @@ export default function ChatView({ userId, displayName, psychState, onStateUpdat
 
   useEffect(() => { scrollToBottom() }, [messages, loading, scrollToBottom])
 
+  // Reload messages if userId changes (e.g. after reset)
+  useEffect(() => {
+    setMessages(loadMessages(userId))
+  }, [userId])
+
+  function addAndSave(newMessages) {
+    setMessages(newMessages)
+    saveMessages(userId, newMessages)
+  }
+
   async function sendMessage() {
     const text = input.trim()
     if (!text || loading) return
 
     setInput('')
     setError(null)
-    setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: text }])
+
+    const userMsg = { id: nextId(), role: 'user', content: text }
+    const nextMessages = [...messages, userMsg]
+    addAndSave(nextMessages)
     setLoading(true)
+
+    // Build conversation history for Claude (previous turns, not including current msg)
+    const history = messages
+      .slice(-MAX_HISTORY_TO_SEND)
+      .map((m) => ({ role: m.role === 'npc' ? 'assistant' : 'user', content: m.content }))
 
     try {
       const result = await api.chat(
@@ -79,17 +117,16 @@ export default function ChatView({ userId, displayName, psychState, onStateUpdat
         text,
         psychState.profile,
         psychState.session,
+        history,
       )
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: nextId(),
-          role: 'npc',
-          content: result.response,
-          signals: result.signals_this_turn,
-        },
-      ])
-      // Persist updated profile + session to localStorage via parent
+
+      const npcMsg = {
+        id: nextId(),
+        role: 'npc',
+        content: result.response,
+        signals: result.signals_this_turn,
+      }
+      addAndSave([...nextMessages, npcMsg])
       onStateUpdate({ profile: result.profile, session: result.session })
     } catch (err) {
       setError(err.message)
@@ -121,7 +158,7 @@ export default function ChatView({ userId, displayName, psychState, onStateUpdat
 
       <div className="chat-messages">
         {messages.map((msg) => (
-          <div key={msg.id} className={`msg-row ${msg.role}`}>
+          <div key={msg.id ?? msg.content.slice(0, 20)} className={`msg-row ${msg.role}`}>
             <span className="msg-sender">{msg.role === 'user' ? displayName : 'Professor'}</span>
             <div className="msg-bubble">{msg.content}</div>
             {msg.role === 'npc' && <TraitFlash signals={msg.signals} />}

@@ -138,7 +138,7 @@ class PsychBrain:
     # Core processing
     # ------------------------------------------------------------------
 
-    def process(self, message: str, return_analysis: bool = False) -> str | dict:
+    def process(self, message: str, return_analysis: bool = False, history: list[dict] | None = None) -> str | dict:
         """
         Process a player message:
         1. Extract psychological signals
@@ -167,6 +167,7 @@ class PsychBrain:
             user_profile=self.user_profile,
             session=self._session.profile,
             npc_persona=self.npc_persona,
+            history=history,
         )
 
         if self.storage:
