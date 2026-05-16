@@ -699,6 +699,96 @@ input, textarea {
   flex-shrink: 0;
 }
 
+/* ── Interview view ─────────────────────────────────────────────────────────── */
+
+.interview-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.interview-header {
+  padding: 12px 16px 0;
+  flex-shrink: 0;
+}
+
+.interview-progress-track {
+  height: 4px;
+  background: var(--surface2);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.interview-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+.interview-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.interview-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 16px;
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.interview-question {
+  font-size: 1.1rem;
+  font-weight: 600;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.interview-signals {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+}
+
+.interview-answer {
+  width: 100%;
+  min-height: 110px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-size: 0.95rem;
+  color: var(--text);
+  outline: none;
+  resize: none;
+  line-height: 1.5;
+  transition: border-color 0.15s;
+}
+
+.interview-answer:focus {
+  border-color: var(--border-bright);
+}
+
+.interview-answer::placeholder {
+  color: var(--text-dim);
+}
+
+.interview-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 /* ── Loading / error states ─────────────────────────────────────────────────── */
 
 .loading-ring {

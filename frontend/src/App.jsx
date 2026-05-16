@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Setup from './components/Setup'
 import Header from './components/Header'
 import ChatView from './components/ChatView'
 import ProfilePanel from './components/ProfilePanel'
+import InterviewView from './components/InterviewView'
 
 function loadPsychState() {
   try {
@@ -22,6 +23,17 @@ export default function App() {
   const [displayName] = useState(() => localStorage.getItem('displayName') || '')
   const [view, setView] = useState('chat')
   const [psychState, setPsychState] = useState(loadPsychState)
+  const [interviewQuestions, setInterviewQuestions] = useState([])
+
+  useEffect(() => {
+    fetch('/api/interview-questions')
+      .then(r => r.json())
+      .then(d => {
+        setInterviewQuestions(d.questions ?? [])
+        window.__INTERVIEW_QUESTIONS__ = d.questions ?? []
+      })
+      .catch(() => {})
+  }, [])
 
   function updateState(newState) {
     savePsychState(newState)
@@ -40,20 +52,14 @@ export default function App() {
     <div className="app">
       <Header displayName={displayName} view={view} onViewChange={setView} />
       <main className="app-main">
-        {view === 'chat' ? (
-          <ChatView
-            userId={userId}
-            displayName={displayName}
-            psychState={psychState}
-            onStateUpdate={updateState}
-          />
-        ) : (
-          <ProfilePanel
-            userId={userId}
-            displayName={displayName}
-            psychState={psychState}
-            onStateUpdate={updateState}
-          />
+        {view === 'chat' && (
+          <ChatView userId={userId} displayName={displayName} psychState={psychState} onStateUpdate={updateState} />
+        )}
+        {view === 'interview' && (
+          <InterviewView userId={userId} displayName={displayName} psychState={psychState} onStateUpdate={updateState} questions={interviewQuestions} />
+        )}
+        {view === 'profile' && (
+          <ProfilePanel userId={userId} displayName={displayName} psychState={psychState} onStateUpdate={updateState} />
         )}
       </main>
     </div>

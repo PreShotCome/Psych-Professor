@@ -6,6 +6,201 @@ Multiple phrasings per slot so the same question never repeats verbatim.
 from __future__ import annotations
 from .models import SessionProfile, TRAIT_NAMES
 
+# Structured 30-question interview for building a baseline psych profile.
+# Each entry: { text, trait, phase }
+# Phases: 1=warmup, 2=values/morality, 3=social/interpersonal, 4=power/control, 5=dark reflection
+INTERVIEW_QUESTIONS = [
+    # ── Phase 1: Warmup ──────────────────────────────────────────────────────
+    {
+        "phase": 1,
+        "phase_name": "Foundations",
+        "trait": "moral",
+        "text": "If you found a wallet on the ground with $500 cash and the owner's ID, what would you do with it?",
+    },
+    {
+        "phase": 1,
+        "phase_name": "Foundations",
+        "trait": "impulsivity",
+        "text": "When you have a big decision to make, do you tend to research everything first, trust your gut, or somewhere in between?",
+    },
+    {
+        "phase": 1,
+        "phase_name": "Foundations",
+        "trait": "dominance",
+        "text": "In a group with no assigned leader, where do you usually end up — at the front, in the middle, or hanging back?",
+    },
+    {
+        "phase": 1,
+        "phase_name": "Foundations",
+        "trait": "curiosity",
+        "text": "What's something you've gone way too deep on recently — a topic, a person, a problem — that most people wouldn't bother with?",
+    },
+    {
+        "phase": 1,
+        "phase_name": "Foundations",
+        "trait": "empathy",
+        "text": "When you see a stranger visibly upset in public, what's your instinct — approach, observe, or look away?",
+    },
+
+    # ── Phase 2: Values & Morality ───────────────────────────────────────────
+    {
+        "phase": 2,
+        "phase_name": "Values",
+        "trait": "moral",
+        "text": "Is it ever okay to lie? If so, give me a situation where you think lying is the right call.",
+    },
+    {
+        "phase": 2,
+        "phase_name": "Values",
+        "trait": "law",
+        "text": "Do you follow rules because you believe in them, or because there are consequences for breaking them?",
+    },
+    {
+        "phase": 2,
+        "phase_name": "Values",
+        "trait": "moral",
+        "text": "Someone you love did something genuinely wrong — not illegal, but morally wrong. Do you call them out or protect them?",
+    },
+    {
+        "phase": 2,
+        "phase_name": "Values",
+        "trait": "empathy",
+        "text": "Think of someone you genuinely dislike. If something bad happened to them, how would you actually feel — be honest.",
+    },
+    {
+        "phase": 2,
+        "phase_name": "Values",
+        "trait": "law",
+        "text": "Have you ever broken a rule or law you thought was unjust? What happened, and would you do it again?",
+    },
+    {
+        "phase": 2,
+        "phase_name": "Values",
+        "trait": "moral",
+        "text": "If you could do something seriously profitable and completely undetectable — but it would hurt people you'd never meet — would you?",
+    },
+    {
+        "phase": 2,
+        "phase_name": "Values",
+        "trait": "deception",
+        "text": "How often do you say what you actually mean versus what you think the other person wants to hear?",
+    },
+
+    # ── Phase 3: Social & Interpersonal ──────────────────────────────────────
+    {
+        "phase": 3,
+        "phase_name": "Relationships",
+        "trait": "paranoia",
+        "text": "How long does it take for someone to earn your genuine trust — and what does it take?",
+    },
+    {
+        "phase": 3,
+        "phase_name": "Relationships",
+        "trait": "empathy",
+        "text": "Describe the last time you went out of your way to help someone — not because you had to, but because you wanted to.",
+    },
+    {
+        "phase": 3,
+        "phase_name": "Relationships",
+        "trait": "aggression",
+        "text": "When someone disrespects you directly, what's your typical response — and what's your ideal response?",
+    },
+    {
+        "phase": 3,
+        "phase_name": "Relationships",
+        "trait": "manipulation",
+        "text": "Have you ever adjusted how you present yourself to get a better outcome with a specific person? Walk me through it.",
+    },
+    {
+        "phase": 3,
+        "phase_name": "Relationships",
+        "trait": "paranoia",
+        "text": "When something goes wrong in your life, what's your first instinct — is it usually someone's fault, a circumstance, or your own?",
+    },
+    {
+        "phase": 3,
+        "phase_name": "Relationships",
+        "trait": "deception",
+        "text": "Is there a version of yourself you keep hidden from most people? What does that version think or want?",
+    },
+    {
+        "phase": 3,
+        "phase_name": "Relationships",
+        "trait": "empathy",
+        "text": "Tell me about a time you hurt someone — intentionally or not. How did you handle it afterward?",
+    },
+
+    # ── Phase 4: Power & Control ─────────────────────────────────────────────
+    {
+        "phase": 4,
+        "phase_name": "Power",
+        "trait": "dominance",
+        "text": "When you give someone advice and they ignore it, how do you feel? What do you do?",
+    },
+    {
+        "phase": 4,
+        "phase_name": "Power",
+        "trait": "manipulation",
+        "text": "If you needed a big favor from someone who had every reason not to help you, how would you approach getting them to say yes?",
+    },
+    {
+        "phase": 4,
+        "phase_name": "Power",
+        "trait": "aggression",
+        "text": "Describe a situation where you completely lost your patience. What triggered it and what did you do?",
+    },
+    {
+        "phase": 4,
+        "phase_name": "Power",
+        "trait": "impulsivity",
+        "text": "Have you ever made a major life decision on impulse — quit a job, ended a relationship, moved somewhere — without much planning?",
+    },
+    {
+        "phase": 4,
+        "phase_name": "Power",
+        "trait": "dominance",
+        "text": "Do you think most people need someone to guide them, or are they capable of figuring things out on their own?",
+    },
+    {
+        "phase": 4,
+        "phase_name": "Power",
+        "trait": "law",
+        "text": "Is there a situation where you think chaos or disorder is actually better than order? What does that look like to you?",
+    },
+
+    # ── Phase 5: Dark Reflection ─────────────────────────────────────────────
+    {
+        "phase": 5,
+        "phase_name": "Shadow",
+        "trait": "moral",
+        "text": "Have you ever done something you've never told anyone about — something that, if people knew, would change how they see you?",
+    },
+    {
+        "phase": 5,
+        "phase_name": "Shadow",
+        "trait": "manipulation",
+        "text": "Have you ever deliberately made someone feel a certain way — guilty, grateful, afraid — to get what you wanted?",
+    },
+    {
+        "phase": 5,
+        "phase_name": "Shadow",
+        "trait": "paranoia",
+        "text": "Is there anyone in your life you trust completely — who knows everything and couldn't use it against you?",
+    },
+    {
+        "phase": 5,
+        "phase_name": "Shadow",
+        "trait": "aggression",
+        "text": "Have you ever hurt someone — emotionally or physically — and not felt bad about it? Be honest.",
+    },
+    {
+        "phase": 5,
+        "phase_name": "Shadow",
+        "trait": "curiosity",
+        "text": "Final question: what's the one thing about yourself that you find most difficult to explain to other people?",
+    },
+]
+
 # [trait][level][phrasing_index]
 QUESTION_BANK: dict[str, list[list[str]]] = {
     "moral": [

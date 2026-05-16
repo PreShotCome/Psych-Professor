@@ -70,6 +70,12 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/api/interview-questions")
+def interview_questions():
+    from psych_brain.questions import INTERVIEW_QUESTIONS
+    return {"questions": INTERVIEW_QUESTIONS}
+
+
 @app.post("/api/chat")
 def chat(req: ChatRequest):
     brain = make_brain(req.user_id, req.display_name, req.profile, req.session)
