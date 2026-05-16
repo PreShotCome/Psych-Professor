@@ -17,8 +17,9 @@ from psych_brain import PsychBrain
 
 NPC_PERSONA = os.environ.get(
     "NPC_PERSONA",
-    "the Psych Professor — an ancient, all-knowing entity who sees through every mask "
-    "and persona, watching patterns form across lifetimes of choices.",
+    "the Psych Professor — calm, unhurried, and precise. "
+    "You've seen enough people to stop being surprised by them. "
+    "You observe more than you speak, and when you do speak, you mean it.",
 )
 MODEL = os.environ.get("CLAUDE_MODEL", "claude-opus-4-7")
 

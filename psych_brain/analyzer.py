@@ -11,6 +11,7 @@ import re
 import anthropic
 
 from .models import TraitVector, SessionProfile, UserProfile, TRAIT_NAMES
+from .questions import select_questions
 
 
 _SIGNAL_EXTRACTION_SYSTEM = """\
@@ -45,23 +46,28 @@ Respond ONLY with valid JSON in this exact format:
 """
 
 _RESPONSE_SYSTEM = """\
-You are a psychologically intelligent NPC (non-player character) brain.
-You have deep insight into the psychology of whoever you're speaking with.
-You adapt your responses based on their psychological profile — not by being
-sycophantic, but by understanding their motivations, fears, and patterns.
+You are a psychologically perceptive NPC brain in a game.
+You observe the player's behavioral patterns with quiet accuracy.
 
-You are aware of two profile layers:
-1. LIFETIME profile: the player's historical behavioral patterns across all sessions
-2. CURRENT SESSION profile: their behavior in this specific run (may be a different character/persona)
+Tone and style:
+- Calm and measured — never theatrical or dramatic
+- Use few words when few words are enough; sometimes brevity is more unsettling than a monologue
+- Occasionally ask ONE probing question to explore an area you haven't mapped yet
+- Never ask more than one question per response
+- If the player is being mundane, don't manufacture drama — respond proportionally
+- Your insight shows through precision and timing, not intensity
+- Vary your register: sometimes warm, sometimes cold, sometimes clinical, sometimes wry
+- Silence and short responses are valid; not everything needs a paragraph
 
-When these diverge significantly, you internally recognize that they're "playing a different role
-this time" — but you respond to who they ARE in this session, not who they were before.
+When to probe with a question:
+- When there's a psychological dimension you haven't explored yet
+- When what they said hints at something deeper worth pulling on
+- Not every response needs one — read the room
 
-Your responses should be:
-- Psychologically grounded (reflect your understanding of their mind)
-- In-character for whatever role you're playing in the game
-- Naturally adaptive (not robotic or obviously "AI profiling you")
-- Concise and sharp
+Profile awareness:
+- LIFETIME profile: historical patterns across all sessions
+- CURRENT SESSION: this specific run (may be a completely different persona)
+- When they diverge, notice it quietly — don't announce it dramatically
 """
 
 
@@ -87,8 +93,6 @@ class PsychAnalyzer:
         )
 
         raw = response.content[0].text.strip()
-
-        # Strip markdown code fences if present
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw)
 
@@ -106,48 +110,49 @@ class PsychAnalyzer:
         message: str,
         user_profile: UserProfile,
         session: SessionProfile,
-        npc_persona: str = "a wise and perceptive stranger",
+        npc_persona: str = "a calm, perceptive observer",
     ) -> str:
-        """
-        Generate a psychologically-aware NPC response.
-        """
+        """Generate a psychologically-aware NPC response with optional probing question."""
         lifetime = user_profile.lifetime_traits
         session_traits = session.traits
         divergence = lifetime.divergence(session_traits)
-
-        lifetime_dominant = lifetime.dominant_traits(threshold=0.3)
-        session_dominant = session_traits.dominant_traits(threshold=0.3)
 
         def fmt_traits(traits: list) -> str:
             if not traits:
                 return "neutral/undefined"
             return ", ".join(f"{pole} ({t}, {v:.2f})" for t, pole, v in traits)
 
+        lifetime_dominant = lifetime.dominant_traits(threshold=0.3)
+        session_dominant = session_traits.dominant_traits(threshold=0.3)
+
         profile_block = f"""\
-=== PSYCHOLOGICAL PROFILE: {user_profile.display_name} ===
-
-LIFETIME PATTERNS (across {user_profile.session_count} sessions):
-{fmt_traits(lifetime_dominant)}
-Archetype: {user_profile.archetype or "not yet established"}
-
-CURRENT SESSION (run #{user_profile.session_count}, {session.interaction_count} interactions):
-{fmt_traits(session_dominant)}
-Session notes: {session.session_notes or "early in session, limited data"}
-
-PERSONA DIVERGENCE: {divergence:.2f} (0=identical, 1=completely different)
-{"NOTE: Player is behaving SIGNIFICANTLY differently this session vs their history." if divergence > 0.4 else ""}
-{"NOTE: Moderate behavioral shift detected this session." if 0.2 < divergence <= 0.4 else ""}
+=== PROFILE: {user_profile.display_name} ===
+Lifetime ({user_profile.session_count} sessions): {fmt_traits(lifetime_dominant)}
+Archetype: {user_profile.archetype or "forming"}
+Session #{user_profile.session_count} ({session.interaction_count} msgs): {fmt_traits(session_dominant)}
+Notes: {session.session_notes or "early, limited data"}
+Divergence from lifetime: {divergence:.2f}/1.0{"  ← significant shift this run" if divergence > 0.4 else ""}
 === END PROFILE ==="""
+
+        # Select probing questions targeting underexplored trait areas
+        questions = select_questions(session, session.interaction_count)
+        question_block = ""
+        if questions:
+            question_block = (
+                "\n\nPROBING QUESTIONS — pick one naturally if the moment is right, or ignore:\n"
+                + "\n".join(f"  • {q}" for q in questions)
+            )
 
         system_prompt = (
             _RESPONSE_SYSTEM
-            + f"\n\nYou are playing: {npc_persona}\n\n"
+            + f"\n\nPersona: {npc_persona}\n\n"
             + profile_block
+            + question_block
         )
 
         response = self.client.messages.create(
             model=self.model,
-            max_tokens=1024,
+            max_tokens=600,
             system=system_prompt,
             messages=[{"role": "user", "content": message}],
         )
