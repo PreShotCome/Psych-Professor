@@ -143,6 +143,18 @@ export default function ProfilePanel({ userId, displayName, psychState, onStateU
         {starting ? 'Starting…' : '+ Start New Session / New Run'}
       </button>
 
+      <button
+        className="new-session-btn"
+        style={{ borderColor: 'rgba(239,68,68,0.4)', color: '#f87171', marginTop: 4 }}
+        onClick={() => {
+          if (!confirm('Reset everything? Your entire profile and history will be erased.')) return
+          localStorage.clear()
+          window.location.reload()
+        }}
+      >
+        ✕ Reset Profile
+      </button>
+
     </div>
   )
 }
