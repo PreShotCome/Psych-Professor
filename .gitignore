@@ -1,5 +1,6 @@
 .env
 __pycache__/
+frontend/node_modules/
 *.pyc
 *.pyo
 profiles/*.json
