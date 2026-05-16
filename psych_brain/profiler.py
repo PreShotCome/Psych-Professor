@@ -6,7 +6,7 @@ from __future__ import annotations
 import time
 
 from .analyzer import PsychAnalyzer
-from .models import UserProfile, TraitVector
+from .models import UserProfile, SessionProfile, TraitVector
 from .session import SessionManager
 from .storage import ProfileStorage
 
@@ -54,6 +54,49 @@ class PsychBrain:
 
         self._session: SessionManager | None = None
 
+    @classmethod
+    def from_state(
+        cls,
+        user_id: str,
+        display_name: str | None,
+        profile_dict: dict | None,
+        session_dict: dict | None,
+        npc_persona: str,
+        model: str,
+    ) -> "PsychBrain":
+        """Create a stateless brain from serialized client state — no disk I/O."""
+        brain: PsychBrain = object.__new__(cls)
+        brain.storage = None
+        brain.npc_persona = npc_persona
+        brain.analyzer = PsychAnalyzer(model=model)
+
+        if profile_dict:
+            brain.user_profile = UserProfile.from_dict(profile_dict)
+            if display_name:
+                brain.user_profile.display_name = display_name
+        else:
+            brain.user_profile = UserProfile(
+                user_id=user_id,
+                display_name=display_name or user_id,
+            )
+
+        if session_dict:
+            brain._session = SessionManager(
+                session_id=session_dict.get("session_id"),
+                existing_profile=SessionProfile.from_dict(session_dict),
+            )
+        else:
+            brain._session = None
+
+        return brain
+
+    def get_state(self) -> dict:
+        """Return serializable state for the client to store locally."""
+        return {
+            "profile": self.user_profile.to_dict(),
+            "session": self._session.profile.to_dict() if self._session else None,
+        }
+
     # ------------------------------------------------------------------
     # Session lifecycle
     # ------------------------------------------------------------------
@@ -87,7 +130,8 @@ class PsychBrain:
         ) and self.user_profile.total_interactions >= 3:
             self.user_profile.archetype = self.analyzer.generate_archetype(self.user_profile)
 
-        self.storage.save(self.user_profile)
+        if self.storage:
+            self.storage.save(self.user_profile)
         self._session = None
 
     # ------------------------------------------------------------------
@@ -125,7 +169,8 @@ class PsychBrain:
             npc_persona=self.npc_persona,
         )
 
-        self.storage.save(self.user_profile)
+        if self.storage:
+            self.storage.save(self.user_profile)
 
         if return_analysis:
             lt = self.user_profile.lifetime_traits

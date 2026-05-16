@@ -1,4 +1,8 @@
-"""FastAPI backend for the PsychBrain PWA."""
+"""
+FastAPI backend for the PsychBrain PWA — fully stateless.
+Profile and session state live in the client (browser localStorage)
+and travel with every request, so no server-side storage is needed.
+"""
 from __future__ import annotations
 
 import os
@@ -10,16 +14,13 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from psych_brain import PsychBrain
-from psych_brain.storage import ProfileStorage
 
-PROFILES_DIR = os.environ.get("PROFILES_DIR", "profiles")
-MODEL = os.environ.get("CLAUDE_MODEL", "claude-opus-4-7")
 NPC_PERSONA = os.environ.get(
     "NPC_PERSONA",
-    "the Psych Professor — an ancient, all-knowing entity who has observed countless souls "
-    "across lifetimes of choices. You see through every mask and persona instantly, "
-    "watching patterns form and shift with quiet, unsettling clarity.",
+    "the Psych Professor — an ancient, all-knowing entity who sees through every mask "
+    "and persona, watching patterns form across lifetimes of choices.",
 )
+MODEL = os.environ.get("CLAUDE_MODEL", "claude-opus-4-7")
 
 app = FastAPI(title="PsychBrain API", docs_url="/api/docs")
 app.add_middleware(
@@ -29,22 +30,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_brains: dict[str, PsychBrain] = {}
-
-
-def get_brain(user_id: str, display_name: str | None = None) -> PsychBrain:
-    if user_id not in _brains:
-        _brains[user_id] = PsychBrain(
-            user_id=user_id,
-            display_name=display_name or user_id,
-            npc_persona=NPC_PERSONA,
-            profiles_dir=PROFILES_DIR,
-            model=MODEL,
-        )
-    elif display_name:
-        _brains[user_id].user_profile.display_name = display_name
-    return _brains[user_id]
-
 
 # ── Request models ───────────────────────────────────────────────────────────
 
@@ -52,11 +37,28 @@ class ChatRequest(BaseModel):
     user_id: str
     display_name: str | None = None
     message: str
+    profile: dict | None = None   # serialized UserProfile from localStorage
+    session: dict | None = None   # serialized SessionProfile from localStorage
 
 
 class SessionRequest(BaseModel):
     user_id: str
     display_name: str | None = None
+    profile: dict | None = None
+    session: dict | None = None
+
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+def make_brain(user_id: str, display_name: str | None, profile: dict | None, session: dict | None) -> PsychBrain:
+    return PsychBrain.from_state(
+        user_id=user_id,
+        display_name=display_name,
+        profile_dict=profile,
+        session_dict=session,
+        npc_persona=NPC_PERSONA,
+        model=MODEL,
+    )
 
 
 # ── API routes ───────────────────────────────────────────────────────────────
@@ -68,45 +70,26 @@ def health():
 
 @app.post("/api/chat")
 def chat(req: ChatRequest):
-    brain = get_brain(req.user_id, req.display_name)
+    brain = make_brain(req.user_id, req.display_name, req.profile, req.session)
     if brain._session is None:
         brain.start_session()
-    return brain.process(req.message, return_analysis=True)
+    result = brain.process(req.message, return_analysis=True)
+    # Return analysis + updated client state
+    return {**result, **brain.get_state()}
 
 
 @app.post("/api/session/start")
 def start_session(req: SessionRequest):
-    brain = get_brain(req.user_id, req.display_name)
-    if brain._session is not None:
-        brain.end_session()
+    brain = make_brain(req.user_id, req.display_name, req.profile, None)
     sid = brain.start_session()
-    return {
-        "session_id": sid,
-        "session_count": brain.user_profile.session_count,
-    }
+    return {"session_id": sid, **brain.get_state()}
 
 
 @app.post("/api/session/end")
 def end_session(req: SessionRequest):
-    brain = get_brain(req.user_id, req.display_name)
+    brain = make_brain(req.user_id, req.display_name, req.profile, req.session)
     brain.end_session()
-    return {"status": "ended"}
-
-
-@app.get("/api/profile/{user_id}")
-def get_profile(user_id: str):
-    return get_brain(user_id).get_profile_summary()
-
-
-@app.get("/api/session/{user_id}")
-def get_session(user_id: str):
-    snap = get_brain(user_id).get_session_snapshot()
-    return {"active": snap is not None, **(snap or {})}
-
-
-@app.get("/api/users")
-def list_users():
-    return {"users": ProfileStorage(PROFILES_DIR).list_users()}
+    return brain.get_state()
 
 
 # ── Serve React SPA (must be last) ──────────────────────────────────────────
@@ -122,4 +105,4 @@ def serve_spa(full_path: str):
     index = _DIST / "index.html"
     if index.exists():
         return FileResponse(str(index))
-    return {"error": "Frontend not built. Run: cd frontend && npm run build"}
+    return {"detail": "Frontend not built yet. Run: cd frontend && npm run build"}

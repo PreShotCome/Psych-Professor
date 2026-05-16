@@ -24,11 +24,7 @@ function TraitFlash({ signals }) {
       {chips.map(({ trait, value }) => {
         const color = traitChipColor(trait, value)
         return (
-          <span
-            key={trait}
-            className="trait-chip"
-            style={{ color, borderColor: `${color}33` }}
-          >
+          <span key={trait} className="trait-chip" style={{ color, borderColor: `${color}33` }}>
             {trait} {value >= 0 ? '+' : ''}{value.toFixed(2)}
           </span>
         )
@@ -53,7 +49,7 @@ function TypingIndicator() {
 let _msgId = 0
 const nextId = () => ++_msgId
 
-export default function ChatView({ userId, displayName, onMessageSent }) {
+export default function ChatView({ userId, displayName, psychState, onStateUpdate }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -65,9 +61,7 @@ export default function ChatView({ userId, displayName, onMessageSent }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
 
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages, loading, scrollToBottom])
+  useEffect(() => { scrollToBottom() }, [messages, loading, scrollToBottom])
 
   async function sendMessage() {
     const text = input.trim()
@@ -75,22 +69,28 @@ export default function ChatView({ userId, displayName, onMessageSent }) {
 
     setInput('')
     setError(null)
-
-    const userMsg = { id: nextId(), role: 'user', content: text }
-    setMessages((prev) => [...prev, userMsg])
+    setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: text }])
     setLoading(true)
 
     try {
-      const result = await api.chat(userId, displayName, text)
-      const npcMsg = {
-        id: nextId(),
-        role: 'npc',
-        content: result.response,
-        signals: result.signals_this_turn,
-        notes: result.signal_notes,
-      }
-      setMessages((prev) => [...prev, npcMsg])
-      onMessageSent?.()
+      const result = await api.chat(
+        userId,
+        displayName,
+        text,
+        psychState.profile,
+        psychState.session,
+      )
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: nextId(),
+          role: 'npc',
+          content: result.response,
+          signals: result.signals_this_turn,
+        },
+      ])
+      // Persist updated profile + session to localStorage via parent
+      onStateUpdate({ profile: result.profile, session: result.session })
     } catch (err) {
       setError(err.message)
     } finally {
@@ -122,9 +122,7 @@ export default function ChatView({ userId, displayName, onMessageSent }) {
       <div className="chat-messages">
         {messages.map((msg) => (
           <div key={msg.id} className={`msg-row ${msg.role}`}>
-            <span className="msg-sender">
-              {msg.role === 'user' ? displayName : 'Professor'}
-            </span>
+            <span className="msg-sender">{msg.role === 'user' ? displayName : 'Professor'}</span>
             <div className="msg-bubble">{msg.content}</div>
             {msg.role === 'npc' && <TraitFlash signals={msg.signals} />}
           </div>
@@ -133,11 +131,7 @@ export default function ChatView({ userId, displayName, onMessageSent }) {
         <div ref={bottomRef} />
       </div>
 
-      {error && (
-        <div className="error-banner">
-          {error}
-        </div>
-      )}
+      {error && <div className="error-banner">{error}</div>}
 
       <div className="chat-input-row">
         <textarea

@@ -17,9 +17,13 @@ WARMUP_INTERACTIONS = 3
 
 
 class SessionManager:
-    def __init__(self, session_id: str | None = None):
+    def __init__(
+        self,
+        session_id: str | None = None,
+        existing_profile: SessionProfile | None = None,
+    ):
         self.session_id = session_id or str(uuid.uuid4())[:8]
-        self.profile = SessionProfile(session_id=self.session_id)
+        self.profile = existing_profile or SessionProfile(session_id=self.session_id)
 
     def record_interaction(self, message: str, signals: TraitVector, notes: str) -> None:
         """Incorporate one interaction's signals into the session profile."""

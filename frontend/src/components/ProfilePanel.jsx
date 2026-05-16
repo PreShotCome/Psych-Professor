@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { api } from '../api'
 import TraitBar from './TraitBar'
 
@@ -13,78 +13,45 @@ function divergenceColor(d) {
   return 'var(--evil)'
 }
 
-export default function ProfilePanel({ userId, displayName }) {
-  const [profile, setProfile] = useState(null)
-  const [session, setSession] = useState(null)
-  const [loading, setLoading] = useState(true)
+export default function ProfilePanel({ userId, displayName, psychState, onStateUpdate }) {
+  const [starting, setStarting] = useState(false)
   const [error, setError] = useState(null)
-  const [startingSession, setStartingSession] = useState(false)
 
-  async function load() {
-    try {
-      setError(null)
-      const [p, s] = await Promise.all([
-        api.getProfile(userId),
-        api.getSession(userId),
-      ])
-      setProfile(p)
-      setSession(s)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const { profile, session } = psychState
+  const lifetimeTraits = profile?.lifetime_traits ?? {}
+  const sessionTraits = session?.traits ?? {}
+  const hasSession = Boolean(session)
 
-  useEffect(() => {
-    load()
-  }, [userId])
+  // Compute divergence locally (mean abs diff / 2 per trait)
+  const divergence = hasSession
+    ? TRAIT_NAMES.reduce((sum, t) => {
+        const lt = lifetimeTraits[t] ?? 0
+        const st = sessionTraits[t] ?? 0
+        return sum + Math.abs(lt - st) / 2
+      }, 0) / TRAIT_NAMES.length
+    : 0
 
   async function handleNewSession() {
-    if (!confirm('Start a new session? The current session will be saved to your lifetime profile.')) return
-    setStartingSession(true)
+    if (!confirm('Start a new session? Current session will be saved to your lifetime profile.')) return
+    setStarting(true)
+    setError(null)
     try {
-      await api.startSession(userId, displayName)
-      await load()
+      const result = await api.startSession(userId, displayName, profile)
+      onStateUpdate({ profile: result.profile, session: result.session })
     } catch (err) {
       setError(err.message)
     } finally {
-      setStartingSession(false)
+      setStarting(false)
     }
-  }
-
-  if (loading) {
-    return (
-      <div className="profile-panel" style={{ alignItems: 'center', justifyContent: 'center' }}>
-        <div className="loading-ring" />
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="profile-panel">
-        <div className="error-banner">{error}</div>
-      </div>
-    )
   }
 
   const initials = (profile?.display_name || displayName || '?')
-    .split(/\s+/)
-    .map((w) => w[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
-
-  const sessionTraits = session?.session_traits ?? {}
-  const lifetimeTraits = profile?.lifetime_traits ?? {}
-  const divergence = session?.divergence ?? 0
-  const hasSession = session?.active
+    .split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()
 
   return (
     <div className="profile-panel">
 
-      {/* Identity card */}
+      {/* Identity */}
       <div className="card">
         <div className="profile-identity">
           <div className="profile-avatar">{initials}</div>
@@ -133,7 +100,7 @@ export default function ProfilePanel({ userId, displayName }) {
         )}
       </div>
 
-      {/* Divergence from lifetime */}
+      {/* Divergence */}
       {hasSession && (
         <div className="card">
           <div className="card-title">Session vs Lifetime Divergence</div>
@@ -150,10 +117,7 @@ export default function ProfilePanel({ userId, displayName }) {
           <div className="divergence-bar">
             <div
               className="divergence-fill"
-              style={{
-                width: `${divergence * 100}%`,
-                backgroundColor: divergenceColor(divergence),
-              }}
+              style={{ width: `${divergence * 100}%`, backgroundColor: divergenceColor(divergence) }}
             />
           </div>
         </div>
@@ -162,7 +126,7 @@ export default function ProfilePanel({ userId, displayName }) {
       {/* Lifetime traits */}
       <div className="card">
         <div className="card-title">Lifetime Profile</div>
-        {profile?.total_interactions > 0 ? (
+        {(profile?.total_interactions ?? 0) > 0 ? (
           <div className="traits-list">
             {TRAIT_NAMES.map((t) => (
               <TraitBar key={t} trait={t} value={lifetimeTraits[t] ?? 0} />
@@ -173,13 +137,10 @@ export default function ProfilePanel({ userId, displayName }) {
         )}
       </div>
 
-      {/* New session */}
-      <button
-        className="new-session-btn"
-        onClick={handleNewSession}
-        disabled={startingSession}
-      >
-        {startingSession ? 'Starting…' : '+ Start New Session / New Run'}
+      {error && <div className="error-banner">{error}</div>}
+
+      <button className="new-session-btn" onClick={handleNewSession} disabled={starting}>
+        {starting ? 'Starting…' : '+ Start New Session / New Run'}
       </button>
 
     </div>

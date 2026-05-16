@@ -1,30 +1,26 @@
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
 async function request(method, path, body) {
-  const opts = {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-  }
+  const opts = { method, headers: { 'Content-Type': 'application/json' } }
   if (body !== undefined) opts.body = JSON.stringify(body)
   const res = await fetch(BASE + path, opts)
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`${res.status}: ${text}`)
-  }
+  if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`)
   return res.json()
 }
 
-const get = (path) => request('GET', path)
 const post = (path, body) => request('POST', path, body)
+const get = (path) => request('GET', path)
 
 export const api = {
   health: () => get('/api/health'),
-  chat: (userId, displayName, message) =>
-    post('/api/chat', { user_id: userId, display_name: displayName, message }),
-  startSession: (userId, displayName) =>
-    post('/api/session/start', { user_id: userId, display_name: displayName }),
-  endSession: (userId) =>
-    post('/api/session/end', { user_id: userId }),
-  getProfile: (userId) => get(`/api/profile/${userId}`),
-  getSession: (userId) => get(`/api/session/${userId}`),
+
+  // profile + session travel with every request; server returns updated versions
+  chat: (userId, displayName, message, profile, session) =>
+    post('/api/chat', { user_id: userId, display_name: displayName, message, profile, session }),
+
+  startSession: (userId, displayName, profile) =>
+    post('/api/session/start', { user_id: userId, display_name: displayName, profile }),
+
+  endSession: (userId, profile, session) =>
+    post('/api/session/end', { user_id: userId, profile, session }),
 }
