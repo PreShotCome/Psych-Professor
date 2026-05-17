@@ -21,6 +21,6 @@ export const api = {
   startSession: (userId, displayName, profile) =>
     post('/api/session/start', { user_id: userId, display_name: displayName, profile }),
 
-  endSession: (userId, profile, session) =>
-    post('/api/session/end', { user_id: userId, profile, session }),
+  endSession: (userId, displayName, profile, session) =>
+    post('/api/session/end', { user_id: userId, display_name: displayName, profile, session }),
 }

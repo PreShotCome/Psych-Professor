@@ -10,9 +10,6 @@ const TRAIT_NAMES = [
 const PHASE_COLORS = {
   1: '#06b6d4',
   2: '#a78bfa',
-  3: '#22c55e',
-  4: '#f59e0b',
-  5: '#ef4444',
 }
 
 function SignalFlash({ signals }) {
@@ -39,26 +36,29 @@ function SignalFlash({ signals }) {
 
 function ProfileSummary({ psychState }) {
   const profile = psychState?.profile
+  const session = psychState?.session
+  // Show lifetime traits if they exist (after endSession), else fall back to session traits
   const lt = profile?.lifetime_traits ?? {}
-  const dominant = TRAIT_NAMES
-    .filter(t => Math.abs(lt[t] ?? 0) >= 0.2)
-    .sort((a, b) => Math.abs(lt[b]) - Math.abs(lt[a]))
+  const st = session?.traits ?? {}
+  const traits = Object.keys(lt).some(k => Math.abs(lt[k] ?? 0) > 0.01) ? lt : st
+  const dominant = TRAIT_NAMES.filter(t => Math.abs(traits[t] ?? 0) >= 0.2)
+    .sort((a, b) => Math.abs(traits[b]) - Math.abs(traits[a]))
 
   return (
     <div className="profile-panel" style={{ justifyContent: 'flex-start' }}>
       <div className="card" style={{ textAlign: 'center', padding: '24px 16px' }}>
         <div style={{ fontSize: '2rem', marginBottom: 8 }}>🧠</div>
         <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent-light)', marginBottom: 4 }}>
-          Profile Complete
+          Calibration Complete
         </div>
         <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-          {profile?.archetype ? `Archetype: ${profile.archetype}` : 'Archetype forming — play more to refine it'}
+          {profile?.archetype ? `Archetype: ${profile.archetype}` : 'Talk more in Chat to refine your archetype'}
         </div>
       </div>
 
       <div className="stats-row">
         <div className="stat-chip">
-          <span className="stat-value">{profile?.total_interactions ?? 0}</span>
+          <span className="stat-value">{profile?.total_interactions ?? session?.interaction_count ?? 0}</span>
           <span className="stat-label">Answers</span>
         </div>
         <div className="stat-chip">
@@ -72,7 +72,7 @@ function ProfileSummary({ psychState }) {
         {dominant.length > 0 ? (
           <div className="traits-list">
             {TRAIT_NAMES.map(t => (
-              <TraitBar key={t} trait={t} value={lt[t] ?? 0} />
+              <TraitBar key={t} trait={t} value={traits[t] ?? 0} />
             ))}
           </div>
         ) : (
@@ -94,12 +94,14 @@ export default function InterviewView({ userId, displayName, psychState, onState
   const [lastSignals, setLastSignals] = useState(null)
   const [error, setError] = useState(null)
   const [done, setDone] = useState(false)
+  const [finalizing, setFinalizing] = useState(false)
 
   const questions = questionsProp?.length ? questionsProp : FALLBACK_QUESTIONS
 
   const q = questions[currentQ]
   const total = questions.length
-  const progress = ((currentQ) / total) * 100
+  const isLastQuestion = currentQ + 1 >= total
+  const progress = (currentQ / total) * 100
 
   async function handleSubmit() {
     const text = answer.trim()
@@ -117,14 +119,25 @@ export default function InterviewView({ userId, displayName, psychState, onState
       )
       setLastSignals(result.signals_this_turn)
       onStateUpdate({ profile: result.profile, session: result.session })
-
-      if (currentQ + 1 >= total) {
-        setDone(true)
-      }
     } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleFinish() {
+    setFinalizing(true)
+    setError(null)
+    try {
+      // end_session blends session→lifetime traits and generates archetype
+      const result = await api.endSession(userId, displayName, psychState.profile, psychState.session)
+      onStateUpdate({ profile: result.profile, session: result.session })
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setFinalizing(false)
+      setDone(true)
     }
   }
 
@@ -134,18 +147,39 @@ export default function InterviewView({ userId, displayName, psychState, onState
     setCurrentQ(q => q + 1)
   }
 
+  function skip() {
+    setAnswer('')
+    setLastSignals(null)
+    if (isLastQuestion) {
+      handleFinish()
+    } else {
+      setCurrentQ(q => q + 1)
+    }
+  }
+
   function handleKeyDown(e) {
     if (e.key === 'Enter' && e.metaKey) handleSubmit()
   }
 
   if (done) return <ProfileSummary psychState={psychState} />
 
+  if (finalizing) {
+    return (
+      <div className="interview-view" style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <div className="card" style={{ textAlign: 'center', padding: '32px 24px' }}>
+          <div style={{ fontSize: '1.5rem', marginBottom: 12 }}>🧠</div>
+          <div style={{ fontSize: '1rem', color: 'var(--accent-light)', fontWeight: 600 }}>Finalizing your profile…</div>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 8 }}>Building archetype and lifetime traits</div>
+        </div>
+      </div>
+    )
+  }
+
   const phaseColor = PHASE_COLORS[q.phase] ?? 'var(--accent)'
 
   return (
     <div className="interview-view">
 
-      {/* Progress */}
       <div className="interview-header">
         <div className="interview-progress-track">
           <div className="interview-progress-fill" style={{ width: `${progress}%`, backgroundColor: phaseColor }} />
@@ -156,11 +190,9 @@ export default function InterviewView({ userId, displayName, psychState, onState
         </div>
       </div>
 
-      {/* Question */}
       <div className="interview-body">
         <div className="interview-question">{q.text}</div>
 
-        {/* Signal feedback from last answer */}
         {lastSignals && (
           <div className="interview-signals">
             <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>
@@ -185,9 +217,15 @@ export default function InterviewView({ userId, displayName, psychState, onState
 
         <div className="interview-actions">
           {lastSignals ? (
-            <button className="setup-btn" onClick={next}>
-              Next Question →
-            </button>
+            isLastQuestion ? (
+              <button className="setup-btn" onClick={handleFinish}>
+                Complete Profile →
+              </button>
+            ) : (
+              <button className="setup-btn" onClick={next}>
+                Next Question →
+              </button>
+            )
           ) : (
             <button className="setup-btn" onClick={handleSubmit} disabled={!answer.trim() || loading}>
               {loading ? 'Analyzing…' : 'Submit Answer'}
@@ -196,7 +234,7 @@ export default function InterviewView({ userId, displayName, psychState, onState
           <button
             className="new-session-btn"
             style={{ marginTop: 0, fontSize: '0.8rem', padding: '10px' }}
-            onClick={() => { setAnswer(''); setLastSignals(null); next() }}
+            onClick={skip}
             disabled={loading}
           >
             Skip
@@ -208,8 +246,7 @@ export default function InterviewView({ userId, displayName, psychState, onState
   )
 }
 
-// Inline fallback — replaced by the fetched list from /api/interview-questions
 const FALLBACK_QUESTIONS = [
-  { phase: 1, phase_name: 'Foundations', trait: 'moral', text: "If you found a wallet with $500 cash and the owner's ID, what would you do?" },
-  { phase: 1, phase_name: 'Foundations', trait: 'empathy', text: "When you see a stranger visibly upset in public, what's your instinct?" },
+  { phase: 1, phase_name: 'Calibration', trait: 'moral', text: "If you found a wallet with $500 cash and the owner's ID, what would you do?" },
+  { phase: 1, phase_name: 'Calibration', trait: 'empathy', text: "When you see a stranger visibly upset in public, what's your instinct?" },
 ]
